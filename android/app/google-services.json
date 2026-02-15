@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "365691447823",
+    "project_id": "taylara-d2bbe",
+    "storage_bucket": "taylara-d2bbe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:365691447823:android:b430ac314c3c1dc501117a",
+        "android_client_info": {
+          "package_name": "com.example.modern_plaster_cast_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKMWmR-y2OEr3rjELiqlWSSZZiFbDmc14"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
