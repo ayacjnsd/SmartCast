@@ -1,26 +1,3 @@
-// lib/main.dart
-//
-// SmartCast — single-file Flutter WEB demo (no Firebase).
-// ✔ RU/EN toggle (global, top-right in AppBar)
-// ✔ Auth (doctor/patient) + registration
-// ✔ Doctor panel: Patients / Alerts / Settings (bottom nav)
-// ✔ Patient panel: Dashboard / Checklist / Visits / Photos / Settings (bottom nav) — different UI
-// ✔ Doctor patient detail: tabs (Overview, Requests, Photos, Timeline, Checklist, Slots calendar)
-// ✔ Timeline: real multi-series chart (CustomPainter) + readings list (Temp/Humidity/Pressure/pH)
-// ✔ Slots calendar (month grid) + visit requests (patient creates, doctor confirms/rejects)
-// ✔ Checklist with HISTORY (each save appends entry) + doctor read-only view
-// ✔ Settings: upload avatar + change phone + change password
-// ✔ Local persistence via window.localStorage (Flutter Web)
-//
-// Demo accounts (pre-seeded on first launch):
-// Doctor:  IIN 111111111111  PASS 1111
-// Patients: IIN 222222222222 PASS 2222 (LOW)
-//           IIN 333333333333 PASS 3333 (HIGH RISK)
-//           IIN 444444444444 PASS 4444 (MEDIUM RISK)
-//
-// Run: flutter run -d chrome (or edge)
-//
-// NOTE: This file imports dart:html, so it's intended for WEB.
 
 import 'dart:async';
 import 'dart:convert';
@@ -34,7 +11,6 @@ void main() {
 }
 
 // ============================== THEME / COLORS ==============================
-// Palette based on your screenshot: dark espresso + warm sand + soft blue-gray.
 
 class AppColors {
   // Core
