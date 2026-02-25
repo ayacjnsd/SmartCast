@@ -1,21 +1,22 @@
 // lib/main.dart
 //
 // SmartCast — single-file Flutter WEB demo (no Firebase).
-// ✔ RU/EN toggle (global)
-// ✔ Auth (doctor/patient), registration
+// ✔ RU/EN toggle (global, top-right in AppBar)
+// ✔ Auth (doctor/patient) + registration
 // ✔ Doctor panel: Patients / Alerts / Settings (bottom nav)
 // ✔ Patient panel: Dashboard / Checklist / Visits / Photos / Settings (bottom nav) — different UI
-// ✔ Patient detail (doctor view): tabs (Overview, Requests, Photos, Timeline, Checklist, Slots calendar)
-// ✔ Timeline with real charts (CustomPainter) + readings list (Temp/Humidity/Pressure/pH)
-// ✔ Slots calendar (month grid) + visit requests
+// ✔ Doctor patient detail: tabs (Overview, Requests, Photos, Timeline, Checklist, Slots calendar)
+// ✔ Timeline: real multi-series chart (CustomPainter) + readings list (Temp/Humidity/Pressure/pH)
+// ✔ Slots calendar (month grid) + visit requests (patient creates, doctor confirms/rejects)
 // ✔ Checklist with HISTORY (each save appends entry) + doctor read-only view
+// ✔ Settings: upload avatar + change phone + change password
 // ✔ Local persistence via window.localStorage (Flutter Web)
 //
 // Demo accounts (pre-seeded on first launch):
 // Doctor:  IIN 111111111111  PASS 1111
-// Patient: IIN 222222222222  PASS 2222
-// Patient: IIN 333333333333  PASS 3333
-// Patient: IIN 444444444444  PASS 4444
+// Patients: IIN 222222222222 PASS 2222 (LOW)
+//           IIN 333333333333 PASS 3333 (HIGH RISK)
+//           IIN 444444444444 PASS 4444 (MEDIUM RISK)
 //
 // Run: flutter run -d chrome (or edge)
 //
@@ -33,24 +34,34 @@ void main() {
 }
 
 // ============================== THEME / COLORS ==============================
+// Palette based on your screenshot: dark espresso + warm sand + soft blue-gray.
 
 class AppColors {
-  // Primary palette (brown-ish, with a bit of accent colors).
-  static const primary = Color(0xFF7A4E2E);
-  static const primaryDark = Color(0xFF613B22);
-  static const bg = Color(0xFFF7F2ED);
+  // Core
+  static const espresso = Color(0xFF311C15); // deep brown
+  static const cocoa = Color(0xFF624D40); // primary brown
+  static const sand = Color(0xFFE4C8B4); // warm sand accent
+  static const mist = Color(0xFFCEDFE9); // soft blue-gray
+  static const sky = Color(0xFF7CA3BF); // blue accent
+  static const slate = Color(0xFF93A1AA);
+
+  // UI
+  static const bg = Color(0xFFF4F3F2);
   static const card = Color(0xFFFFFFFF);
-  static const outline = Color(0xFFE7D7CB);
+  static const outline = Color(0xFFE7DDD6);
   static const text = Color(0xFF1C1B1A);
   static const textMuted = Color(0xFF6F6258);
 
-  // Accents (so it’s not “only brown”)
-  static const accentBlue = Color(0xFF2F80ED);
+  // Accents (add “a bit more colors”)
+  static const accentBlue = Color(0xFF7CA3BF);
   static const accentTeal = Color(0xFF1AAE9F);
   static const accentPurple = Color(0xFF8B5CF6);
   static const accentGreen = Color(0xFF27AE60);
   static const accentRed = Color(0xFFEB5757);
   static const accentAmber = Color(0xFFF2A54A);
+
+  static const primary = cocoa;
+  static const primaryDark = espresso;
 
   static Color chipBg(Color c) => c.withOpacity(0.12);
 }
@@ -59,7 +70,12 @@ ThemeData buildTheme() {
   final base = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
+    colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary).copyWith(
+      primary: AppColors.primary,
+      secondary: AppColors.accentBlue,
+      surface: AppColors.card,
+      outline: AppColors.outline,
+    ),
     scaffoldBackgroundColor: AppColors.bg,
   );
 
@@ -67,10 +83,9 @@ ThemeData buildTheme() {
     textTheme: base.textTheme.apply(
       bodyColor: AppColors.text,
       displayColor: AppColors.text,
-      fontFamily: null,
     ),
     appBarTheme: const AppBarTheme(
-      backgroundColor: AppColors.primary,
+      backgroundColor: AppColors.primaryDark,
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: false,
@@ -80,7 +95,6 @@ ThemeData buildTheme() {
         fontSize: 16,
       ),
     ),
-    // IMPORTANT FIX: use CardThemeData (new API) not CardTheme (widget)
     cardTheme: const CardThemeData(
       color: AppColors.card,
       elevation: 0,
@@ -111,7 +125,7 @@ ThemeData buildTheme() {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.primaryDark,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -131,6 +145,17 @@ ThemeData buildTheme() {
       side: const BorderSide(color: AppColors.outline),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       labelStyle: const TextStyle(fontWeight: FontWeight.w800),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: Colors.white,
+      indicatorColor: AppColors.primary.withOpacity(0.12),
+      labelTextStyle: WidgetStateProperty.all(
+        const TextStyle(fontWeight: FontWeight.w800, color: AppColors.text),
+      ),
+      iconTheme: WidgetStateProperty.resolveWith((states) {
+        final selected = states.contains(WidgetState.selected);
+        return IconThemeData(color: selected ? AppColors.primaryDark : AppColors.textMuted);
+      }),
     ),
   );
 }
@@ -184,9 +209,18 @@ class L10n {
       'sendRequest': 'Отправить запрос',
       'pickSlot': 'Выбрать слот',
       'note': 'Заметки',
-      'language': 'Язык',
-      'demo': 'Демо',
       'delete': 'Удалить',
+      'upload': 'Загрузить',
+      'cancel': 'Отмена',
+      'confirm': 'Подтв.',
+      'reject': 'Откл.',
+      'avatar': 'Аватар',
+      'changePhone': 'Изменить номер',
+      'changePassword': 'Изменить пароль',
+      'newPhone': 'Новый телефон',
+      'newPassword': 'Новый пароль',
+      'apply': 'Применить',
+      'roleHint': 'Выберите роль',
     };
 
     final en = <String, String>{
@@ -229,9 +263,18 @@ class L10n {
       'sendRequest': 'Send request',
       'pickSlot': 'Pick slot',
       'note': 'Notes',
-      'language': 'Language',
-      'demo': 'Demo',
       'delete': 'Delete',
+      'upload': 'Upload',
+      'cancel': 'Cancel',
+      'confirm': 'Confirm',
+      'reject': 'Reject',
+      'avatar': 'Avatar',
+      'changePhone': 'Change phone',
+      'changePassword': 'Change password',
+      'newPhone': 'New phone',
+      'newPassword': 'New password',
+      'apply': 'Apply',
+      'roleHint': 'Select role',
     };
 
     return (lang == AppLang.ru ? ru : en)[key] ?? key;
@@ -249,6 +292,7 @@ class AppUser {
     required this.password,
     required this.fullName,
     required this.phone,
+    this.avatarDataUrl,
   });
 
   final Role role;
@@ -256,6 +300,7 @@ class AppUser {
   String password;
   String fullName;
   String phone;
+  String? avatarDataUrl; // WEB: data:image/...;base64,...
 
   Map<String, dynamic> toJson() => {
         'role': role.name,
@@ -263,6 +308,7 @@ class AppUser {
         'password': password,
         'fullName': fullName,
         'phone': phone,
+        'avatarDataUrl': avatarDataUrl,
       };
 
   static AppUser fromJson(Map<String, dynamic> j) => AppUser(
@@ -271,6 +317,7 @@ class AppUser {
         password: j['password'],
         fullName: j['fullName'] ?? '',
         phone: j['phone'] ?? '',
+        avatarDataUrl: j['avatarDataUrl'],
       );
 }
 
@@ -411,10 +458,15 @@ class PatientProfile {
         iin: j['iin'],
         name: j['name'] ?? '',
         doctorIIN: j['doctorIIN'] ?? '',
-        readings: (j['readings'] as List? ?? []).map((e) => Reading.fromJson(Map<String, dynamic>.from(e))).toList(),
-        checklistHistory:
-            (j['checklistHistory'] as List? ?? []).map((e) => ChecklistEntry.fromJson(Map<String, dynamic>.from(e))).toList(),
-        requests: (j['requests'] as List? ?? []).map((e) => VisitRequest.fromJson(Map<String, dynamic>.from(e))).toList(),
+        readings: (j['readings'] as List? ?? [])
+            .map((e) => Reading.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+        checklistHistory: (j['checklistHistory'] as List? ?? [])
+            .map((e) => ChecklistEntry.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+        requests: (j['requests'] as List? ?? [])
+            .map((e) => VisitRequest.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
         photoDataUrls: (j['photoDataUrls'] as List? ?? []).cast<String>(),
       );
 }
@@ -422,7 +474,7 @@ class PatientProfile {
 // ============================== STORE (localStorage) ==============================
 
 class AppStore extends ChangeNotifier {
-  static const _key = 'smartcast_store_v3';
+  static const _key = 'smartcast_store_v6';
 
   AppUser? currentUser;
 
@@ -449,15 +501,19 @@ class AppStore extends ChangeNotifier {
         ..addAll((j['users'] as List).map((e) => AppUser.fromJson(Map<String, dynamic>.from(e))));
       patients
         ..clear()
-        ..addEntries((j['patients'] as List)
-            .map((e) => PatientProfile.fromJson(Map<String, dynamic>.from(e)))
-            .map((p) => MapEntry(p.iin, p)));
+        ..addEntries(
+          (j['patients'] as List)
+              .map((e) => PatientProfile.fromJson(Map<String, dynamic>.from(e)))
+              .map((p) => MapEntry(p.iin, p)),
+        );
     } catch (_) {
       _seed();
       _save();
     }
     notifyListeners();
   }
+
+  void forceSave() => _save();
 
   void _seed() {
     users.clear();
@@ -472,19 +528,18 @@ class AppStore extends ChangeNotifier {
       phone: '+7 777 111 22 33',
     ));
 
-    // Patients
+    // Patients (3 demo, incl. high + medium risk)
     users.addAll([
       AppUser(role: Role.patient, iin: '222222222222', password: '2222', fullName: 'Alex K.', phone: '+7 708 226 5040'),
       AppUser(role: Role.patient, iin: '333333333333', password: '3333', fullName: 'Boris P.', phone: '+7 701 333 1010'),
       AppUser(role: Role.patient, iin: '444444444444', password: '4444', fullName: 'Nora S.', phone: '+7 702 444 2020'),
     ]);
 
-    // Patient profiles linked to doctor
+    // Profiles linked to doctor
     patients['222222222222'] = PatientProfile(iin: '222222222222', name: 'Alex K.', doctorIIN: '111111111111');
     patients['333333333333'] = PatientProfile(iin: '333333333333', name: 'Boris P.', doctorIIN: '111111111111');
     patients['444444444444'] = PatientProfile(iin: '444444444444', name: 'Nora S.', doctorIIN: '111111111111');
 
-    // Seed readings & checklist history
     for (final p in patients.values) {
       _seedPatientData(p);
     }
@@ -492,40 +547,62 @@ class AppStore extends ChangeNotifier {
 
   void _seedPatientData(PatientProfile p) {
     final now = DateTime.now();
-    final baseTemp = 36.6 + (p.iin.endsWith('2') ? 0.1 : p.iin.endsWith('3') ? 0.3 : 0.0);
-    final baseHum = 48 + (p.iin.endsWith('2') ? 6 : p.iin.endsWith('3') ? 10 : 4);
-    final basePh = 6.7 + (p.iin.endsWith('3') ? -0.1 : 0.0);
+
+    // Risk targeting:
+    // 2222 = LOW
+    // 3333 = HIGH
+    // 4444 = MEDIUM
+    final isHigh = p.iin == '333333333333';
+    final isMed = p.iin == '444444444444';
+
     final rand = math.Random(int.parse(p.iin.substring(0, 3)));
 
+    double baseTemp = 36.6;
+    double baseHum = 50;
+    double basePh = 6.8;
+    int basePr = 4;
+
+    if (isHigh) {
+      baseTemp = 38.2;
+      baseHum = 76;
+      basePh = 5.9;
+      basePr = 8;
+    } else if (isMed) {
+      baseTemp = 37.4;
+      baseHum = 66;
+      basePh = 6.2;
+      basePr = 6;
+    }
+
     p.readings.clear();
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 12; i++) {
       final ts = now.subtract(Duration(hours: i * 6));
       p.readings.add(Reading(
         ts: ts,
-        tempC: (baseTemp + (rand.nextDouble() - 0.5) * 0.6),
-        humidityPct: (baseHum + (rand.nextDouble() - 0.5) * 18).clamp(20, 90),
-        pressure10: (3 + rand.nextInt(5)).clamp(0, 10),
-        ph: (basePh + (rand.nextDouble() - 0.5) * 0.5).clamp(5.5, 8.0),
+        tempC: (baseTemp + (rand.nextDouble() - 0.5) * (isHigh ? 0.5 : 0.6)).clamp(35.5, 40.2),
+        humidityPct: (baseHum + (rand.nextDouble() - 0.5) * (isHigh ? 10 : 16)).clamp(20, 95),
+        pressure10: (basePr + (rand.nextDouble() - 0.5) * (isHigh ? 2 : 3)).round().clamp(0, 10),
+        ph: (basePh + (rand.nextDouble() - 0.5) * (isHigh ? 0.4 : 0.6)).clamp(5.5, 8.0),
       ));
     }
     p.readings.sort((a, b) => b.ts.compareTo(a.ts));
 
     p.checklistHistory.clear();
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
       final ts = now.subtract(Duration(days: i));
+      final badDay = isHigh ? (i == 0 || i == 2) : (isMed ? (i == 1) : false);
       p.checklistHistory.add(ChecklistEntry(
         ts: ts,
-        stayedDry: i != 2,
+        stayedDry: !badDay,
         noWaterInside: true,
-        noStrongItch: i != 1,
-        noSwelling: i != 1,
+        noStrongItch: !badDay,
+        noSwelling: !badDay,
         noBadSmell: true,
       ));
     }
     p.checklistHistory.sort((a, b) => b.ts.compareTo(a.ts));
 
     p.requests.clear();
-    // add one pending for Alex
     if (p.iin == '222222222222') {
       p.requests.add(VisitRequest(
         id: 'req_${now.millisecondsSinceEpoch}',
@@ -565,7 +642,6 @@ class AppStore extends ChangeNotifier {
     users.add(AppUser(role: role, iin: iin, password: password, fullName: fullName, phone: phone));
 
     if (role == Role.patient) {
-      // link to first doctor (demo) for this prototype
       final doc = users.firstWhere((u) => u.role == Role.doctor, orElse: () => users.first);
       patients[iin] = PatientProfile(iin: iin, name: fullName.isEmpty ? iin : fullName, doctorIIN: doc.iin);
       _seedPatientData(patients[iin]!);
@@ -578,6 +654,53 @@ class AppStore extends ChangeNotifier {
 
   void logout() {
     currentUser = null;
+    notifyListeners();
+  }
+
+  // -------- User settings --------
+
+  AppUser? userByIin(String iin) => users.firstWhere((u) => u.iin == iin, orElse: () => AppUser(role: Role.patient, iin: 'x', password: 'x', fullName: 'x', phone: 'x'));
+
+  void updatePhone(String iin, String newPhone) {
+    final idx = users.indexWhere((u) => u.iin == iin);
+    if (idx == -1) return;
+    users[idx].phone = newPhone;
+    if (currentUser?.iin == iin) currentUser!.phone = newPhone;
+    _save();
+    notifyListeners();
+  }
+
+  void updatePassword(String iin, String newPassword) {
+    final idx = users.indexWhere((u) => u.iin == iin);
+    if (idx == -1) return;
+    users[idx].password = newPassword;
+    if (currentUser?.iin == iin) currentUser!.password = newPassword;
+    _save();
+    notifyListeners();
+  }
+
+  Future<void> updateAvatar(String iin) async {
+    final idx = users.indexWhere((u) => u.iin == iin);
+    if (idx == -1) return;
+
+    final input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+
+    await input.onChange.first;
+    final file = input.files?.first;
+    if (file == null) return;
+
+    final reader = html.FileReader();
+    reader.readAsDataUrl(file);
+    await reader.onLoad.first;
+
+    final dataUrl = (reader.result as String?) ?? '';
+    if (dataUrl.isEmpty) return;
+
+    users[idx].avatarDataUrl = dataUrl;
+    if (currentUser?.iin == iin) currentUser!.avatarDataUrl = dataUrl;
+
+    _save();
     notifyListeners();
   }
 
@@ -594,7 +717,6 @@ class AppStore extends ChangeNotifier {
   // -------- Risk / Alerts --------
 
   int computeRisk(PatientProfile p) {
-    // Very simple heuristic demo
     final r = p.readings.isEmpty ? null : p.readings.first;
     int score = 0;
     if (r != null) {
@@ -627,13 +749,12 @@ class AppStore extends ChangeNotifier {
           severity: risk >= 70 ? 3 : 2,
         ));
       }
-      // pending requests
       for (final req in p.requests.where((x) => x.status == 'Pending')) {
         list.add(_AlertItem(
           patientIIN: p.iin,
           patientName: p.name,
           title: 'Pending visit request',
-          subtitle: '${_fmtDateTime(req.slot)}',
+          subtitle: _fmtDateTime(req.slot),
           severity: 1,
         ));
       }
@@ -863,7 +984,6 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() => error = msg);
         return;
       }
-      // Auto-login after register
       widget.store.login(role, iin, pass);
     }
   }
@@ -960,7 +1080,6 @@ class _AuthCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // top row: brand pill + lang
             Row(
               children: [
                 _BrandPill(),
@@ -969,16 +1088,13 @@ class _AuthCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-
             Text(
               isLogin ? l10n.t('login') : l10n.t('register'),
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 12),
-
             _RoleSegmented(role: role, onRole: onRole, l10n: l10n),
             const SizedBox(height: 12),
-
             TextField(
               controller: iinC,
               keyboardType: TextInputType.number,
@@ -988,7 +1104,6 @@ class _AuthCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: passC,
               obscureText: true,
@@ -997,7 +1112,6 @@ class _AuthCard extends StatelessWidget {
                 prefixIcon: const Icon(Icons.lock_outline),
               ),
             ),
-
             if (!isLogin) ...[
               const SizedBox(height: 10),
               TextField(
@@ -1016,7 +1130,6 @@ class _AuthCard extends StatelessWidget {
                 ),
               ),
             ],
-
             const SizedBox(height: 12),
             if (error != null)
               Container(
@@ -1030,7 +1143,6 @@ class _AuthCard extends StatelessWidget {
                 child: Text(error!, style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
             if (error != null) const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -1038,14 +1150,11 @@ class _AuthCard extends StatelessWidget {
                 child: Text(isLogin ? l10n.t('signIn') : l10n.t('signUp')),
               ),
             ),
-
             const SizedBox(height: 10),
             TextButton(
               onPressed: onToggleMode,
               child: Text(isLogin ? l10n.t('noAccount') : l10n.t('haveAccount')),
             ),
-
-            // IMPORTANT: user asked to remove "Create demo account" — so not here.
           ],
         ),
       ),
@@ -1065,7 +1174,7 @@ class _RightBrandPanel extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primaryDark, AppColors.primary],
+          colors: [AppColors.primaryDark, AppColors.primary, AppColors.accentBlue],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1082,7 +1191,7 @@ class _RightBrandPanel extends StatelessWidget {
                   width: 54,
                   height: 54,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withOpacity(0.16),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.white.withOpacity(0.18)),
                   ),
@@ -1098,13 +1207,13 @@ class _RightBrandPanel extends StatelessWidget {
                         l10n.t('smartcast'),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 44,
+                          fontSize: 46,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        isRu ? 'Современный мониторинг гипса\nмежду визитами.' : 'Modern cast monitoring\nbetween visits.',
+                        isRu ? 'Мониторинг гипса между визитами.\nВрач видит риск, пациент — понятный план.' : 'Cast monitoring between visits.\nDoctor sees risk, patient sees a clear plan.',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.92),
                           fontSize: 18,
@@ -1112,7 +1221,19 @@ class _RightBrandPanel extends StatelessWidget {
                           height: 1.35,
                         ),
                       ),
-                      // IMPORTANT: user asked to remove the extra sentence box — so we keep it clean.
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: const [
+                          _Badge(text: 'Temp'),
+                          _Badge(text: 'Humidity'),
+                          _Badge(text: 'Pressure'),
+                          _Badge(text: 'pH'),
+                          _Badge(text: 'Checklist'),
+                          _Badge(text: 'Visits'),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -1125,20 +1246,38 @@ class _RightBrandPanel extends StatelessWidget {
   }
 }
 
+class _Badge extends StatelessWidget {
+  const _Badge({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+    );
+  }
+}
+
 class _BrandPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.bg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: AppColors.outline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.shield_outlined, size: 18, color: AppColors.primary),
+          Icon(Icons.shield_outlined, size: 18, color: AppColors.primaryDark),
           SizedBox(width: 8),
           Text('SmartCast', style: TextStyle(fontWeight: FontWeight.w900)),
         ],
@@ -1160,6 +1299,7 @@ class _LangPill extends StatelessWidget {
       icon: const Icon(Icons.language, size: 18),
       label: Text(lang == AppLang.ru ? 'RU' : 'EN'),
       style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
@@ -1191,13 +1331,13 @@ class _RoleSegmented extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 18, color: active ? AppColors.primary : AppColors.textMuted),
+                Icon(icon, size: 18, color: active ? AppColors.primaryDark : AppColors.textMuted),
                 const SizedBox(width: 8),
                 Text(
                   label,
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    color: active ? AppColors.primary : AppColors.textMuted,
+                    color: active ? AppColors.primaryDark : AppColors.textMuted,
                   ),
                 ),
               ],
@@ -1325,19 +1465,17 @@ class _DoctorPatientsTabState extends State<_DoctorPatientsTab> {
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: () {
-                  // demo: add random new patient (still no firebase)
                   final next = (math.Random().nextInt(900) + 100).toString().padLeft(3, '0');
                   final iin = '55555555$next$next';
                   final pass = '5555';
                   final name = 'New Patient $next';
                   widget.store.register(Role.patient, iin, pass, name, '+7 700 000 00 00');
-                  // link to doctor
-                  widget.store.patients[iin]!.doctorIIN = doctorIIN;
-                  // persist link
-                  html.window.localStorage.remove('dummy'); // no-op
-                  // force save
-                  widget.store
-                    ..notifyListeners();
+                  final profile = widget.store.patients[iin];
+                  if (profile != null) {
+                    profile.doctorIIN = doctorIIN;
+                    widget.store.forceSave();
+                    widget.store.notifyListeners();
+                  }
                 },
                 icon: const Icon(Icons.person_add_alt_1),
                 label: Text(l10n.t('addPatient')),
@@ -1352,11 +1490,7 @@ class _DoctorPatientsTabState extends State<_DoctorPatientsTab> {
               itemBuilder: (context, i) {
                 final p = list[i];
                 final risk = widget.store.computeRisk(p);
-                final riskColor = risk < 45
-                    ? AppColors.accentGreen
-                    : risk < 70
-                        ? AppColors.accentAmber
-                        : AppColors.accentRed;
+                final riskColor = _riskColor(risk);
 
                 return Card(
                   child: InkWell(
@@ -1376,7 +1510,12 @@ class _DoctorPatientsTabState extends State<_DoctorPatientsTab> {
                       padding: const EdgeInsets.all(14),
                       child: Row(
                         children: [
-                          _AvatarCircle(name: p.name, color: AppColors.primary, size: 44),
+                          _AvatarCircle(
+                            name: p.name,
+                            color: AppColors.primaryDark,
+                            size: 44,
+                            dataUrl: widget.store.users.firstWhere((u) => u.iin == p.iin, orElse: () => AppUser(role: Role.patient, iin: '', password: '', fullName: p.name, phone: '')).avatarDataUrl,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -1396,7 +1535,7 @@ class _DoctorPatientsTabState extends State<_DoctorPatientsTab> {
                               border: Border.all(color: riskColor.withOpacity(0.28)),
                             ),
                             child: Text(
-                              'RISK $risk',
+                              risk >= 70 ? l10n.t('riskHigh') : (risk >= 45 ? l10n.t('riskMed') : l10n.t('riskLow')),
                               style: TextStyle(color: riskColor, fontWeight: FontWeight.w900),
                             ),
                           ),
@@ -1410,28 +1549,7 @@ class _DoctorPatientsTabState extends State<_DoctorPatientsTab> {
               },
             ),
           ),
-          const SizedBox(height: 6),
-          _DemoCredsHint(l10n: l10n),
         ],
-      ),
-    );
-  }
-}
-
-class _DemoCredsHint extends StatelessWidget {
-  const _DemoCredsHint({required this.l10n});
-  final L10n l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final isRu = l10n.lang == AppLang.ru;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        isRu
-            ? 'Демо: врач 111111111111 / 1111 • пациенты 2222..4444'
-            : 'Demo: doctor 111111111111 / 1111 • patients 2222..4444',
-        style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -1523,6 +1641,12 @@ class _DoctorAlertsTab extends StatelessWidget {
 
 // ============================== PATIENT DETAIL (Doctor view) ==============================
 
+class _TabItem {
+  _TabItem(this.icon, this.label);
+  final IconData icon;
+  final String label;
+}
+
 class DoctorPatientDetailPage extends StatefulWidget {
   const DoctorPatientDetailPage({
     super.key,
@@ -1557,23 +1681,22 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
       );
     }
 
-    final tabs = [
-      (Icons.grid_view_rounded, l10n.t('overview')),
-      (Icons.event_available_outlined, l10n.t('requests')),
-      (Icons.photo_library_outlined, l10n.t('photos')),
-      (Icons.show_chart, l10n.t('timeline')),
-      (Icons.checklist_outlined, l10n.t('checklist')),
-      (Icons.calendar_month_outlined, l10n.t('slots')),
+    final tabs = <_TabItem>[
+      _TabItem(Icons.grid_view_rounded, l10n.t('overview')),
+      _TabItem(Icons.event_available_outlined, l10n.t('requests')),
+      _TabItem(Icons.photo_library_outlined, l10n.t('photos')),
+      _TabItem(Icons.show_chart, l10n.t('timeline')),
+      _TabItem(Icons.checklist_outlined, l10n.t('checklist')),
+      _TabItem(Icons.calendar_month_outlined, l10n.t('slots')),
     ];
 
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          // user asked: add back button
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('${p.name}'),
+        title: Text(p.name),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10),
@@ -1583,9 +1706,8 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
       ),
       body: Column(
         children: [
-          // top tabs row (like screenshot)
           Container(
-            color: const Color(0xFFF1E8E1),
+            color: AppColors.mist.withOpacity(0.45),
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1606,13 +1728,13 @@ class _DoctorPatientDetailPageState extends State<DoctorPatientDetailPage> {
                         ),
                         child: Row(
                           children: [
-                            Icon(tabs[i].$1, size: 18, color: active ? AppColors.primary : AppColors.textMuted),
+                            Icon(tabs[i].icon, size: 18, color: active ? AppColors.primaryDark : AppColors.textMuted),
                             const SizedBox(width: 8),
                             Text(
-                              tabs[i].$2,
+                              tabs[i].label,
                               style: TextStyle(
                                 fontWeight: FontWeight.w900,
-                                color: active ? AppColors.primary : AppColors.textMuted,
+                                color: active ? AppColors.primaryDark : AppColors.textMuted,
                               ),
                             ),
                           ],
@@ -1664,7 +1786,7 @@ class _DoctorPatientTabBody extends StatelessWidget {
       case 2:
         return _PhotosCard(store: store, l10n: l10n, patient: patient, canUpload: false);
       case 3:
-        return _TimelineCard(store: store, l10n: l10n, patient: patient);
+        return _TimelineCard(l10n: l10n, patient: patient);
       case 4:
         return _ChecklistCard(store: store, l10n: l10n, patient: patient, editable: false);
       case 5:
@@ -1693,11 +1815,7 @@ class _PatientOverviewCard extends StatelessWidget {
             ? l10n.t('riskMed')
             : l10n.t('riskHigh');
 
-    final riskColor = risk < 45
-        ? AppColors.accentGreen
-        : risk < 70
-            ? AppColors.accentAmber
-            : AppColors.accentRed;
+    final riskColor = _riskColor(risk);
 
     return ListView(
       children: [
@@ -1729,9 +1847,7 @@ class _PatientOverviewCard extends StatelessWidget {
                       Text(riskText, style: TextStyle(color: riskColor, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 6),
                       Text(
-                        l10n.lang == AppLang.ru
-                            ? 'Сводка: показатели мониторинга между визитами.'
-                            : 'Summary: monitoring indicators between visits.',
+                        l10n.lang == AppLang.ru ? 'Показатели с датчиков + чек-лист.' : 'Sensor vitals + checklist summary.',
                         style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700),
                       ),
                     ],
@@ -1748,7 +1864,7 @@ class _PatientOverviewCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.lang == AppLang.ru ? 'Vitals' : 'Vitals', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                Text('Vitals', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 10,
@@ -1770,7 +1886,7 @@ class _PatientOverviewCard extends StatelessWidget {
                       value: r == null ? '—' : '${r.pressure10}/10',
                     ),
                     _VitalChip(
-                      color: AppColors.primary,
+                      color: AppColors.primaryDark,
                       label: 'pH',
                       value: r == null ? '—' : r.ph.toStringAsFixed(1),
                     ),
@@ -1811,7 +1927,7 @@ class _VitalChip extends StatelessWidget {
         children: [
           Container(width: 8, height: 8, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99))),
           const SizedBox(width: 10),
-          Text('$label ', style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w800)),
+          Text('$label ', style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w800)),
           Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w900)),
         ],
       ),
@@ -1820,9 +1936,8 @@ class _VitalChip extends StatelessWidget {
 }
 
 class _TimelineCard extends StatelessWidget {
-  const _TimelineCard({required this.store, required this.l10n, required this.patient});
+  const _TimelineCard({required this.l10n, required this.patient});
 
-  final AppStore store;
   final L10n l10n;
   final PatientProfile patient;
 
@@ -1837,30 +1952,26 @@ class _TimelineCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.lang == AppLang.ru ? 'Mini chart' : 'Mini chart',
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                Text(l10n.lang == AppLang.ru ? 'Графики' : 'Charts', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                 const SizedBox(height: 10),
                 SizedBox(
-                  height: 140,
+                  height: 160,
                   child: readings.length < 2
-                      ? Center(
-                          child: Text(l10n.t('empty'),
-                              style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700)),
-                        )
+                      ? Center(child: Text(l10n.t('empty'), style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700)))
                       : CustomPaint(
                           painter: _VitalsChartPainter(readings: readings),
                           child: const SizedBox.expand(),
                         ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Wrap(
-                  spacing: 10,
+                  spacing: 12,
                   runSpacing: 8,
                   children: const [
                     _LegendDot(color: AppColors.accentBlue, text: 'Temp'),
                     _LegendDot(color: AppColors.accentTeal, text: 'Humidity'),
                     _LegendDot(color: AppColors.accentPurple, text: 'Pressure'),
-                    _LegendDot(color: AppColors.primary, text: 'pH'),
+                    _LegendDot(color: AppColors.primaryDark, text: 'pH'),
                   ],
                 ),
               ],
@@ -1874,10 +1985,9 @@ class _TimelineCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.lang == AppLang.ru ? 'Readings' : 'Readings',
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                Text(l10n.lang == AppLang.ru ? 'Измерения' : 'Readings', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                 const SizedBox(height: 10),
-                ...patient.readings.take(12).map((r) => Padding(
+                ...patient.readings.take(14).map((r) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Container(
                         padding: const EdgeInsets.all(12),
@@ -1892,11 +2002,11 @@ class _TimelineCard extends StatelessWidget {
                               width: 42,
                               height: 42,
                               decoration: BoxDecoration(
-                                color: AppColors.bg,
+                                color: AppColors.mist.withOpacity(0.35),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(color: AppColors.outline),
                               ),
-                              child: const Icon(Icons.sensors, color: AppColors.primary),
+                              child: const Icon(Icons.sensors, color: AppColors.primaryDark),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -1906,9 +2016,9 @@ class _TimelineCard extends StatelessWidget {
                                   Text(_fmtDateTime(r.ts), style: const TextStyle(fontWeight: FontWeight.w900)),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Temp: ${r.tempC.toStringAsFixed(1)}°C   '
-                                    'Humidity: ${r.humidityPct.toStringAsFixed(0)}%   '
-                                    'Pressure: ${r.pressure10}/10   '
+                                    '${l10n.lang == AppLang.ru ? 'Темп' : 'Temp'}: ${r.tempC.toStringAsFixed(1)}°C   '
+                                    '${l10n.lang == AppLang.ru ? 'Влажн' : 'Humidity'}: ${r.humidityPct.toStringAsFixed(0)}%   '
+                                    '${l10n.lang == AppLang.ru ? 'Давл' : 'Pressure'}: ${r.pressure10}/10   '
                                     'pH: ${r.ph.toStringAsFixed(1)}',
                                     style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700),
                                   ),
@@ -1966,7 +2076,6 @@ class _VitalsChartPainter extends CustomPainter {
     double minPr = prs.reduce(math.min), maxPr = prs.reduce(math.max);
     double minPh = phs.reduce(math.min), maxPh = phs.reduce(math.max);
 
-    // avoid flat lines
     if ((maxTemp - minTemp).abs() < 0.01) {
       maxTemp += 0.5;
       minTemp -= 0.5;
@@ -1984,10 +2093,10 @@ class _VitalsChartPainter extends CustomPainter {
       minPh -= 0.3;
     }
 
-    // grid
     final gridPaint = Paint()
-      ..color = AppColors.outline.withOpacity(0.7)
+      ..color = AppColors.outline.withOpacity(0.8)
       ..strokeWidth = 1;
+
     for (int i = 0; i <= 4; i++) {
       final y = pad + h * (i / 4);
       canvas.drawLine(Offset(pad, y), Offset(pad + w, y), gridPaint);
@@ -1996,8 +2105,9 @@ class _VitalsChartPainter extends CustomPainter {
     void drawSeries(List<double> values, double minV, double maxV, Color color) {
       final p = Paint()
         ..color = color
-        ..strokeWidth = 2.2
-        ..style = PaintingStyle.stroke;
+        ..strokeWidth = 2.4
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
 
       final path = Path();
       for (int i = 0; i < values.length; i++) {
@@ -2012,18 +2122,17 @@ class _VitalsChartPainter extends CustomPainter {
       }
       canvas.drawPath(path, p);
 
-      // last dot
       final lx = pad + w;
       final lt = (values.last - minV) / (maxV - minV);
       final ly = pad + h * (1 - lt);
       final dot = Paint()..color = color;
-      canvas.drawCircle(Offset(lx, ly), 3.4, dot);
+      canvas.drawCircle(Offset(lx, ly), 3.8, dot);
     }
 
     drawSeries(temps, minTemp, maxTemp, AppColors.accentBlue);
     drawSeries(hums, minHum, maxHum, AppColors.accentTeal);
     drawSeries(prs, minPr, maxPr, AppColors.accentPurple);
-    drawSeries(phs, minPh, maxPh, AppColors.primary);
+    drawSeries(phs, minPh, maxPh, AppColors.primaryDark);
   }
 
   @override
@@ -2128,7 +2237,6 @@ class _ChecklistCardState extends State<_ChecklistCard> {
                     ),
                   ),
                 ] else ...[
-                  // read-only (doctor view)
                   _ReadOnlyCheck(label: l10n.lang == AppLang.ru ? 'Гипс оставался сухим' : 'Cast stayed dry', ok: last?.stayedDry ?? false),
                   _ReadOnlyCheck(label: l10n.lang == AppLang.ru ? 'Вода не попадала под гипс' : 'No water inside cast', ok: last?.noWaterInside ?? false),
                   _ReadOnlyCheck(label: l10n.lang == AppLang.ru ? 'Не было сильного зуда' : 'No strong itch', ok: last?.noStrongItch ?? false),
@@ -2156,7 +2264,7 @@ class _ChecklistCardState extends State<_ChecklistCard> {
                 if (widget.patient.checklistHistory.isEmpty)
                   Text(l10n.t('empty'), style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700))
                 else
-                  ...widget.patient.checklistHistory.take(12).map(
+                  ...widget.patient.checklistHistory.take(14).map(
                         (e) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: Container(
@@ -2172,11 +2280,11 @@ class _ChecklistCardState extends State<_ChecklistCard> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: AppColors.bg,
+                                    color: AppColors.mist.withOpacity(0.30),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(color: AppColors.outline),
                                   ),
-                                  child: const Icon(Icons.fact_check_outlined, color: AppColors.primary),
+                                  child: const Icon(Icons.fact_check_outlined, color: AppColors.primaryDark),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -2363,11 +2471,11 @@ class _PatientRequestsCardState extends State<_PatientRequestsCard> {
                             if (widget.asDoctor && r.status == 'Pending') ...[
                               TextButton(
                                 onPressed: () => widget.store.updateRequestStatus(widget.patient.iin, r.id, 'Confirmed'),
-                                child: Text(l10n.lang == AppLang.ru ? 'Подтв.' : 'Confirm'),
+                                child: Text(l10n.t('confirm')),
                               ),
                               TextButton(
                                 onPressed: () => widget.store.updateRequestStatus(widget.patient.iin, r.id, 'Rejected'),
-                                child: Text(l10n.lang == AppLang.ru ? 'Откл.' : 'Reject'),
+                                child: Text(l10n.t('reject')),
                               ),
                             ],
                           ],
@@ -2436,7 +2544,7 @@ class _PickSlotDialogState extends State<_PickSlotDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.lang == AppLang.ru ? 'Отмена' : 'Cancel')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.t('cancel'))),
       ],
     );
   }
@@ -2515,7 +2623,7 @@ class _SlotsCalendarCardState extends State<_SlotsCalendarCard> {
                   const SizedBox(height: 6),
                   Text(
                     widget.asDoctor
-                        ? (l10n.lang == AppLang.ru ? 'Доктор: слоты только для просмотра' : 'Doctor: view-only slots')
+                        ? (l10n.lang == AppLang.ru ? 'Доктор: просмотр слотов' : 'Doctor: view-only slots')
                         : (l10n.lang == AppLang.ru ? 'Нажмите время чтобы отправить запрос' : 'Tap a time to send request'),
                     style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700),
                   ),
@@ -2559,7 +2667,7 @@ class _PhotosCard extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: () => store.addPhoto(patient.iin),
                     icon: const Icon(Icons.upload),
-                    label: Text(l10n.lang == AppLang.ru ? 'Загрузить' : 'Upload'),
+                    label: Text(l10n.t('upload')),
                   ),
               ],
             ),
@@ -2710,19 +2818,22 @@ class _PatientDashboardTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = patient.readings.isEmpty ? null : patient.readings.first;
     final risk = store.computeRisk(patient);
-    final riskColor = risk < 45
-        ? AppColors.accentGreen
-        : risk < 70
-            ? AppColors.accentAmber
-            : AppColors.accentRed;
+    final riskColor = _riskColor(risk);
 
-    // Patient dashboard: cards grid (NOT same as doctor)
     return LayoutBuilder(
       builder: (context, c) {
         final twoCols = c.maxWidth >= 920;
         final colW = twoCols ? (c.maxWidth - 12) / 2 : c.maxWidth;
 
-        Widget card(Widget child) => SizedBox(width: colW, child: Card(child: Padding(padding: const EdgeInsets.all(14), child: child)));
+        Widget card(Widget child) => SizedBox(
+              width: colW,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: child,
+                ),
+              ),
+            );
 
         return SingleChildScrollView(
           child: Wrap(
@@ -2745,7 +2856,7 @@ class _PatientDashboardTab extends StatelessWidget {
                             border: Border.all(color: riskColor.withOpacity(0.28)),
                           ),
                           child: Text(
-                            'RISK $risk',
+                            risk >= 70 ? l10n.t('riskHigh') : (risk >= 45 ? l10n.t('riskMed') : l10n.t('riskLow')),
                             style: TextStyle(color: riskColor, fontWeight: FontWeight.w900),
                           ),
                         ),
@@ -2772,15 +2883,15 @@ class _PatientDashboardTab extends StatelessWidget {
                           value: r == null ? '—' : '${r.pressure10}/10',
                         ),
                         _VitalChip(
-                          color: AppColors.primary,
+                          color: AppColors.primaryDark,
                           label: 'pH',
                           value: r == null ? '—' : r.ph.toStringAsFixed(1),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     SizedBox(
-                      height: 120,
+                      height: 140,
                       child: patient.readings.length < 2
                           ? Center(child: Text(l10n.t('empty')))
                           : CustomPaint(
@@ -2800,8 +2911,7 @@ class _PatientDashboardTab extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(l10n.lang == AppLang.ru ? 'Запись на приём' : 'Appointment',
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                    Text(l10n.lang == AppLang.ru ? 'Календарь' : 'Calendar', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                     const SizedBox(height: 10),
                     MonthCalendar(
                       month: DateTime(DateTime.now().year, DateTime.now().month, 1),
@@ -2811,7 +2921,7 @@ class _PatientDashboardTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      l10n.lang == AppLang.ru ? 'Выберите вкладку «Визиты» чтобы отправить запрос' : 'Open “Visits” to send a request',
+                      l10n.lang == AppLang.ru ? 'Откройте «Визиты», чтобы отправить запрос' : 'Open “Visits” to send a request',
                       style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -2833,10 +2943,9 @@ class _PatientDashboardTab extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(l10n.lang == AppLang.ru ? 'Советы' : 'Tips',
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                    Text(l10n.lang == AppLang.ru ? 'Подсказки' : 'Tips', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                     const SizedBox(height: 10),
-                    _TipRow(icon: Icons.check_circle_outline, color: AppColors.accentGreen, text: l10n.lang == AppLang.ru ? 'Заполняйте чек-лист 1 раз в день' : 'Fill the checklist daily'),
+                    _TipRow(icon: Icons.check_circle_outline, color: AppColors.accentGreen, text: l10n.lang == AppLang.ru ? 'Заполняйте чек-лист каждый день' : 'Fill the checklist daily'),
                     _TipRow(icon: Icons.photo_camera_outlined, color: AppColors.accentBlue, text: l10n.lang == AppLang.ru ? 'Добавляйте фото при изменениях' : 'Upload photos if changes appear'),
                     _TipRow(icon: Icons.event_available_outlined, color: AppColors.accentAmber, text: l10n.lang == AppLang.ru ? 'При тревоге отправьте запрос на визит' : 'If worried, send a visit request'),
                   ],
@@ -2866,7 +2975,7 @@ class _DoctorMiniTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _AvatarCircle(name: name, color: AppColors.accentPurple, size: 40),
+          _AvatarCircle(name: name, color: AppColors.accentBlue, size: 40),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -2923,7 +3032,7 @@ class _SettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final u = store.currentUser;
+    final u = store.currentUser!;
 
     return ListView(
       children: [
@@ -2932,23 +3041,26 @@ class _SettingsTab extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                _AvatarCircle(name: u?.fullName ?? '—', color: AppColors.primary, size: 44),
+                _AvatarCircle(
+                  name: u.fullName,
+                  color: AppColors.primaryDark,
+                  size: 48,
+                  dataUrl: u.avatarDataUrl,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(u?.fullName ?? '—', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                      Text(u.fullName, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                       const SizedBox(height: 3),
-                      Text(u?.iin ?? '—', style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700)),
+                      Text(u.iin, style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 3),
+                      Text(u.phone, style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: () => onLang(lang == AppLang.ru ? AppLang.en : AppLang.ru),
-                  icon: const Icon(Icons.language, size: 18),
-                  label: Text(lang == AppLang.ru ? 'RU' : 'EN'),
-                ),
+                // IMPORTANT: no extra language switch here (user asked to remove it from settings screen).
               ],
             ),
           ),
@@ -2962,6 +3074,59 @@ class _SettingsTab extends StatelessWidget {
               children: [
                 Text(l10n.t('settings'), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                 const SizedBox(height: 10),
+
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.image_outlined),
+                  title: Text(l10n.t('avatar'), style: const TextStyle(fontWeight: FontWeight.w900)),
+                  subtitle: Text(l10n.lang == AppLang.ru ? 'Загрузить фото профиля' : 'Upload profile photo'),
+                  onTap: () => store.updateAvatar(u.iin),
+                ),
+                const Divider(),
+
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.phone_outlined),
+                  title: Text(l10n.t('changePhone'), style: const TextStyle(fontWeight: FontWeight.w900)),
+                  onTap: () async {
+                    final v = await showDialog<String>(
+                      context: context,
+                      builder: (_) => _TextEditDialog(
+                        title: l10n.t('changePhone'),
+                        label: l10n.t('newPhone'),
+                        initial: u.phone,
+                        l10n: l10n,
+                      ),
+                    );
+                    if (v != null && v.trim().isNotEmpty) {
+                      store.updatePhone(u.iin, v.trim());
+                    }
+                  },
+                ),
+                const Divider(),
+
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.lock_outline),
+                  title: Text(l10n.t('changePassword'), style: const TextStyle(fontWeight: FontWeight.w900)),
+                  onTap: () async {
+                    final v = await showDialog<String>(
+                      context: context,
+                      builder: (_) => _TextEditDialog(
+                        title: l10n.t('changePassword'),
+                        label: l10n.t('newPassword'),
+                        initial: '',
+                        obscure: true,
+                        l10n: l10n,
+                      ),
+                    );
+                    if (v != null && v.trim().length >= 4) {
+                      store.updatePassword(u.iin, v.trim());
+                    }
+                  },
+                ),
+                const Divider(),
+
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.logout),
@@ -2972,6 +3137,51 @@ class _SettingsTab extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _TextEditDialog extends StatefulWidget {
+  const _TextEditDialog({
+    required this.title,
+    required this.label,
+    required this.initial,
+    required this.l10n,
+    this.obscure = false,
+  });
+
+  final String title;
+  final String label;
+  final String initial;
+  final bool obscure;
+  final L10n l10n;
+
+  @override
+  State<_TextEditDialog> createState() => _TextEditDialogState();
+}
+
+class _TextEditDialogState extends State<_TextEditDialog> {
+  late final TextEditingController c;
+
+  @override
+  void initState() {
+    super.initState();
+    c = TextEditingController(text: widget.initial);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: c,
+        obscureText: widget.obscure,
+        decoration: InputDecoration(labelText: widget.label),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(widget.l10n.t('cancel'))),
+        FilledButton(onPressed: () => Navigator.of(context).pop(c.text), child: Text(widget.l10n.t('apply'))),
       ],
     );
   }
@@ -3031,7 +3241,7 @@ class MonthCalendar extends StatelessWidget {
       items[weekday + i] = DateTime(month.year, month.month, i + 1);
     }
 
-    final headerStyle = TextStyle(
+    final dayStyle = TextStyle(
       color: AppColors.textMuted,
       fontWeight: FontWeight.w800,
       fontSize: mode == CalendarMode.compact ? 12 : 13,
@@ -3055,11 +3265,11 @@ class MonthCalendar extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: items.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 7,
             mainAxisSpacing: 6,
             crossAxisSpacing: 6,
-            childAspectRatio: 1.25,
+            childAspectRatio: mode == CalendarMode.compact ? 1.35 : 1.25,
           ),
           itemBuilder: (context, i) {
             final d = items[i];
@@ -3069,7 +3279,7 @@ class MonthCalendar extends StatelessWidget {
             final isToday = _sameDate(DateTime.now(), d);
 
             final bg = isSel
-                ? AppColors.primary.withOpacity(0.18)
+                ? AppColors.primary.withOpacity(0.16)
                 : isToday
                     ? AppColors.accentBlue.withOpacity(0.10)
                     : Colors.white;
@@ -3092,8 +3302,8 @@ class MonthCalendar extends StatelessWidget {
                 child: Center(
                   child: Text(
                     '${d.day}',
-                    style: headerStyle.copyWith(
-                      color: isSel ? AppColors.primary : AppColors.text,
+                    style: dayStyle.copyWith(
+                      color: isSel ? AppColors.primaryDark : AppColors.text,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -3125,27 +3335,55 @@ class _Dow extends StatelessWidget {
 // ============================== SMALL UI HELPERS ==============================
 
 class _AvatarCircle extends StatelessWidget {
-  const _AvatarCircle({required this.name, required this.color, required this.size});
+  const _AvatarCircle({
+    required this.name,
+    required this.color,
+    required this.size,
+    this.dataUrl,
+  });
 
   final String name;
   final Color color;
   final double size;
+  final String? dataUrl;
 
   @override
   Widget build(BuildContext context) {
+    final border = Border.all(color: color.withOpacity(0.28));
+    final radius = BorderRadius.circular(size / 2);
+
+    if (dataUrl != null && dataUrl!.startsWith('data:image')) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: border,
+          ),
+          child: Image.network(dataUrl!, fit: BoxFit.cover),
+        ),
+      );
+    }
+
     final parts = name.trim().split(RegExp(r'\s+'));
-    final initials = (parts.isEmpty ? '?' : parts.first[0]) + (parts.length > 1 ? parts[1][0] : '');
+    final first = parts.isEmpty ? '?' : parts.first;
+    final a = first.isEmpty ? '?' : first[0];
+    final b = parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
+    final initials = (a + b).toUpperCase();
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(size / 2),
-        border: Border.all(color: color.withOpacity(0.28)),
+        borderRadius: radius,
+        border: border,
       ),
       child: Center(
         child: Text(
-          initials.toUpperCase(),
+          initials,
           style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: size * 0.34),
         ),
       ),
@@ -3154,6 +3392,12 @@ class _AvatarCircle extends StatelessWidget {
 }
 
 // ============================== UTILS ==============================
+
+Color _riskColor(int risk) {
+  if (risk >= 70) return AppColors.accentRed;
+  if (risk >= 45) return AppColors.accentAmber;
+  return AppColors.accentGreen;
+}
 
 String _fmtDateTime(DateTime d) {
   String two(int v) => v.toString().padLeft(2, '0');
